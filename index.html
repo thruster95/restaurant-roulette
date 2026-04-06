@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎡 맛집 룰렛</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;background:#f9f9f9;color:#1a1a1a;}
+#app{display:flex;flex-direction:column;align-items:center;padding:2rem 1rem;gap:1.25rem;min-height:100vh;}
+.screen{width:100%;max-width:420px;display:flex;flex-direction:column;align-items:center;gap:1.25rem;}
+.hidden{display:none!important;}
+
+.logo{font-size:26px;font-weight:600;color:#1a1a1a;text-align:center;}
+.sub{font-size:14px;color:#888;text-align:center;margin-top:4px;line-height:1.6;}
+.badge-gpt{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;font-size:11px;border-radius:12px;background:#e6f7f3;color:#0d8c6d;margin-bottom:4px;}
+
+.input-row{display:flex;gap:8px;width:100%;}
+#region-input{flex:1;padding:11px 14px;font-size:15px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a1a;outline:none;}
+#region-input:focus{border-color:#10a37f;box-shadow:0 0 0 3px rgba(16,163,127,0.1);}
+.btn-primary{padding:11px 20px;font-size:15px;font-weight:500;border-radius:8px;border:none;background:#10a37f;color:#fff;cursor:pointer;white-space:nowrap;transition:background 0.15s;}
+.btn-primary:hover{background:#0d8c6d;}
+
+.tag-wrap{text-align:center;width:100%;}
+.tag-label{font-size:12px;color:#bbb;margin-bottom:8px;}
+.tag-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;}
+.tag{padding:5px 12px;font-size:13px;border-radius:20px;border:1px solid #e0e0e0;background:#fff;color:#666;cursor:pointer;transition:all 0.15s;}
+.tag:hover{border-color:#10a37f;color:#10a37f;}
+
+#loading-screen{min-height:300px;justify-content:center;align-items:center;}
+.spinner{width:44px;height:44px;border:3px solid #eee;border-top-color:#10a37f;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:1rem;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.load-txt{font-size:15px;color:#888;text-align:center;line-height:1.8;}
+.load-region{font-weight:600;color:#1a1a1a;}
+
+.roulette-header{display:flex;align-items:center;gap:10px;width:100%;}
+.btn-back{padding:6px 12px;font-size:13px;border-radius:8px;border:1px solid #e0e0e0;background:#fff;color:#666;cursor:pointer;transition:background 0.15s;}
+.btn-back:hover{background:#f5f5f5;}
+.region-title{font-size:16px;font-weight:600;color:#1a1a1a;}
+.region-count{font-size:13px;color:#888;}
+
+#wheel-wrap{position:relative;display:flex;align-items:center;justify-content:center;}
+#pointer{position:absolute;top:-13px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;border-top:24px solid #E24B4A;z-index:10;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2));}
+
+.btn-spin{padding:12px 48px;font-size:17px;font-weight:600;border-radius:12px;border:none;background:#10a37f;color:#fff;cursor:pointer;transition:background 0.15s,transform 0.1s;box-shadow:0 2px 8px rgba(16,163,127,0.3);}
+.btn-spin:hover{background:#0d8c6d;}
+.btn-spin:active{transform:scale(0.97);}
+.btn-spin:disabled{opacity:0.4;cursor:not-allowed;}
+
+#result-card{display:none;width:100%;background:#fff;border:1px solid #eee;border-radius:16px;padding:1.5rem;text-align:center;box-shadow:0 2px 16px rgba(0,0,0,0.07);}
+#res-emoji{font-size:34px;display:block;margin-bottom:10px;}
+#res-name{font-size:22px;font-weight:600;color:#1a1a1a;margin-bottom:5px;}
+#res-cat{display:inline-block;padding:3px 10px;font-size:12px;border-radius:12px;background:#e6f7f3;color:#0d8c6d;margin-bottom:10px;}
+#res-menu{font-size:13px;color:#666;line-height:1.7;margin-bottom:6px;}
+#res-addr{font-size:12px;color:#bbb;margin-bottom:16px;}
+.map-btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+.btn-naver{display:inline-block;padding:9px 18px;background:#03C75A;color:#fff;border-radius:8px;font-size:13px;font-weight:500;text-decoration:none;}
+.btn-kakao{display:inline-block;padding:9px 18px;background:#FEE500;color:#3C1E1E;border-radius:8px;font-size:13px;font-weight:500;text-decoration:none;}
+.btn-google{display:inline-block;padding:9px 18px;background:#f2f2f2;color:#444;border-radius:8px;border:1px solid #e0e0e0;font-size:13px;font-weight:500;text-decoration:none;}
+
+.err-box{padding:1rem;background:#fff8f8;border-radius:8px;font-size:13px;color:#c0392b;text-align:center;width:100%;border:1px solid #fcc;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- 검색 화면 -->
+  <div id="search-screen" class="screen">
+    <div style="text-align:center;">
+      <div class="badge-gpt">✨ ChatGPT 웹 검색</div>
+      <div class="logo">🎡 맛집 룰렛</div>
+      <div class="sub">지역을 입력하면 ChatGPT가 주변 맛집을 찾아<br>룰렛을 만들어드려요!</div>
+    </div>
+    <div class="input-row">
+      <input id="region-input" type="text" placeholder="예: 홍대입구역, 성수동, 강남역..." />
+      <button class="btn-primary" id="search-btn">검색</button>
+    </div>
+    <div class="tag-wrap">
+      <div class="tag-label">빠른 검색</div>
+      <div class="tag-row">
+        <span class="tag">홍대입구역</span>
+        <span class="tag">강남역</span>
+        <span class="tag">성수동</span>
+        <span class="tag">이태원</span>
+        <span class="tag">종로3가</span>
+        <span class="tag">여의도</span>
+        <span class="tag">합정</span>
+        <span class="tag">신촌</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 로딩 화면 -->
+  <div id="loading-screen" class="screen hidden">
+    <div class="spinner"></div>
+    <div class="load-txt">
+      <span class="load-region" id="load-region"></span> 주변<br>
+      ChatGPT가 맛집을 검색하는 중이에요...
+    </div>
+  </div>
+
+  <!-- 룰렛 화면 -->
+  <div id="roulette-screen" class="screen hidden">
+    <div class="roulette-header">
+      <button class="btn-back" id="back-btn">← 다시 검색</button>
+      <div>
+        <span class="region-title" id="roulette-region"></span>
+        <span class="region-count" id="roulette-count"></span>
+      </div>
+    </div>
+    <div id="wheel-wrap">
+      <div id="pointer"></div>
+      <canvas id="wheel" width="320" height="320"></canvas>
+    </div>
+    <button class="btn-spin" id="spin-btn">🎲 돌리기!</button>
+    <div id="result-card">
+      <span id="res-emoji"></span>
+      <div id="res-name"></div>
+      <span id="res-cat"></span>
+      <div id="res-menu"></div>
+      <div id="res-addr"></div>
+      <div class="map-btns">
+        <a id="btn-naver" class="btn-naver" target="_blank">네이버 지도</a>
+        <a id="btn-kakao" class="btn-kakao" target="_blank">카카오맵</a>
+        <a id="btn-google" class="btn-google" target="_blank">구글 지도</a>
+      </div>
+    </div>
+    <div id="err-msg" class="err-box hidden"></div>
+  </div>
+
+</div>
+
+<script>
+const COLORS=["#D85A30","#185FA5","#1D9E75","#BA7517","#993556","#639922","#533AB7","#0F6E56","#993C1D","#3B6D11","#D4537E","#0C447C","#3C3489","#857A3B","#85B7EB"];
+const EMOJI_MAP={'한식':'🍚','일식':'🍣','중식':'🥟','양식':'🍝','분식':'🍜','카페':'☕','술집':'🍺','베트남':'🍜','치킨':'🍗','피자':'🍕','버거':'🍔','해산물':'🐟','고기':'🥩','국수':'🍜','삼겹살':'🥓','디저트':'🧁','라멘':'🍜','이자카야':'🍶','태국':'🍛','인도':'🍛'};
+
+let restaurants=[],currentAngle=0,spinning=false;
+const canvas=document.getElementById('wheel'),ctx=canvas.getContext('2d');
+
+function getEmoji(cat){
+  if(!cat)return'🍽️';
+  for(const[k,v]of Object.entries(EMOJI_MAP)){if(cat.includes(k))return v;}
+  return'🍽️';
+}
+function showScreen(id){
+  ['search-screen','loading-screen','roulette-screen'].forEach(s=>{
+    document.getElementById(s).classList.toggle('hidden',s!==id);
+  });
+}
+function drawWheel(angle){
+  const n=restaurants.length;if(!n)return;
+  const arc=(2*Math.PI)/n,cx=canvas.width/2,cy=canvas.height/2,r=148;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(let i=0;i<n;i++){
+    const s=angle+i*arc-Math.PI/2,e=s+arc;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,s,e);ctx.closePath();
+    ctx.fillStyle=COLORS[i%COLORS.length];ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.7)';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(s+arc/2);
+    ctx.textAlign='right';ctx.fillStyle='#fff';
+    ctx.font='bold 11.5px -apple-system,sans-serif';
+    const nm=restaurants[i].name.length>7?restaurants[i].name.slice(0,7)+'…':restaurants[i].name;
+    ctx.fillText(nm,r-10,4);ctx.restore();
+  }
+  ctx.beginPath();ctx.arc(cx,cy,22,0,2*Math.PI);
+  ctx.fillStyle='#fff';ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=1;ctx.stroke();
+}
+function easeOut(t){return 1-Math.pow(1-t,4);}
+
+document.getElementById('spin-btn').addEventListener('click',()=>{
+  if(spinning||!restaurants.length)return;
+  spinning=true;
+  document.getElementById('spin-btn').disabled=true;
+  document.getElementById('result-card').style.display='none';
+  const n=restaurants.length,arc=(2*Math.PI)/n;
+  const targetSlice=Math.floor(Math.random()*n);
+  const fullSpins=(4+Math.floor(Math.random()*4))*2*Math.PI;
+  const targetFinal=-(targetSlice+0.5)*arc;
+  const curNorm=((currentAngle%(2*Math.PI))+2*Math.PI)%(2*Math.PI);
+  const tgtNorm=((targetFinal%(2*Math.PI))+2*Math.PI)%(2*Math.PI);
+  const diff=(tgtNorm-curNorm+2*Math.PI)%(2*Math.PI);
+  const totalRot=fullSpins+diff,dur=4000+Math.random()*1500;
+  const startA=currentAngle;let startT=null;
+  function animate(ts){
+    if(!startT)startT=ts;
+    const p=Math.min((ts-startT)/dur,1);
+    currentAngle=startA+totalRot*easeOut(p);
+    drawWheel(currentAngle);
+    if(p<1)requestAnimationFrame(animate);
+    else{spinning=false;document.getElementById('spin-btn').disabled=false;showResult();}
+  }
+  requestAnimationFrame(animate);
+});
+
+function showResult(){
+  const n=restaurants.length,arc=(2*Math.PI)/n;
+  const idx=(((Math.floor(-currentAngle/arc))%n)+n)%n;
+  const r=restaurants[idx];
+  document.getElementById('res-emoji').textContent=getEmoji(r.category);
+  document.getElementById('res-name').textContent=r.name;
+  document.getElementById('res-cat').textContent=r.category||'음식점';
+  document.getElementById('res-menu').textContent=r.menu?'대표 메뉴: '+r.menu:'';
+  document.getElementById('res-addr').textContent=r.address||'';
+  const q=encodeURIComponent(r.name+(r.address?' '+r.address.split(' ').slice(0,3).join(' '):''));
+  document.getElementById('btn-naver').href=`https://map.naver.com/p/search/${q}`;
+  document.getElementById('btn-kakao').href=`https://map.kakao.com/?q=${q}`;
+  document.getElementById('btn-google').href=`https://www.google.com/maps/search/${q}`;
+  const card=document.getElementById('result-card');
+  card.style.display='block';
+  card.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+async function searchRestaurants(region){
+  showScreen('loading-screen');
+  document.getElementById('load-region').textContent=region;
+  document.getElementById('err-msg').classList.add('hidden');
+  try{
+    // ✅ 직접 OpenAI 호출이 아닌 /api/search 프록시 호출
+    const resp=await fetch('/api/search',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({region})
+    });
+    if(!resp.ok){
+      const err=await resp.json().catch(()=>({}));
+      throw new Error(err.error||`서버 오류 (${resp.status})`);
+    }
+    const data=await resp.json();
+    restaurants=data.restaurants||[];
+    if(!restaurants.length)throw new Error('검색 결과가 없어요. 다른 지역을 입력해보세요.');
+    currentAngle=0;drawWheel(0);
+    document.getElementById('roulette-region').textContent=region;
+    document.getElementById('roulette-count').textContent=` · ${restaurants.length}개 맛집`;
+    document.getElementById('result-card').style.display='none';
+    showScreen('roulette-screen');
+  }catch(e){
+    showScreen('roulette-screen');
+    const err=document.getElementById('err-msg');
+    err.classList.remove('hidden');
+    err.textContent='맛집 검색에 실패했어요: '+(e.message||'알 수 없는 오류');
+    document.getElementById('roulette-region').textContent=region;
+    document.getElementById('roulette-count').textContent='';
+  }
+}
+
+function doSearch(){
+  const v=document.getElementById('region-input').value.trim();
+  if(!v){document.getElementById('region-input').focus();return;}
+  searchRestaurants(v);
+}
+document.getElementById('search-btn').addEventListener('click',doSearch);
+document.getElementById('region-input').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();});
+document.querySelectorAll('.tag').forEach(t=>{
+  t.addEventListener('click',()=>{
+    document.getElementById('region-input').value=t.textContent;
+    searchRestaurants(t.textContent);
+  });
+});
+document.getElementById('back-btn').addEventListener('click',()=>{restaurants=[];showScreen('search-screen');});
+</script>
+</body>
+</html>
