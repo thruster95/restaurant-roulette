@@ -1,12 +1,12 @@
 // api/search.js - Vercel Serverless Function
 // ✅ 네이버 공식 Local Search API 사용
+// ✅ 키워드 3종 병렬 호출로 15개 확보 (display=5 제한 우회)
 // ✅ 빠름 (300~500ms), 안정적, 완전 무료
-// ✅ 3번 병렬 호출로 최대 15개 수집
 // 필요 환경변수: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET
 
 const rateLimit = new Map();
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1분
-const RATE_LIMIT_MAX = 10;           // 분당 최대 10회
+const RATE_LIMIT_WINDOW = 60 * 1000;
+const RATE_LIMIT_MAX = 10;
 
 function checkRateLimit(ip) {
   const now = Date.now();
@@ -17,12 +17,10 @@ function checkRateLimit(ip) {
   return record.count <= RATE_LIMIT_MAX;
 }
 
-// 네이버 HTML 태그 제거 (<b>, </b> 등)
 function stripTags(str) {
   return (str || '').replace(/<[^>]*>/g, '').trim();
 }
 
-// 카테고리 → 이모지
 function categoryToEmoji(cat) {
   if (!cat) return '🍽️';
   if (cat.includes('한식')) return '🍚';
@@ -43,7 +41,6 @@ function categoryToEmoji(cat) {
   return '🍽️';
 }
 
-// 카테고리 정리: "음식점 > 한식 > 삼겹살" → "한식 · 삼겹살"
 function cleanCategory(raw) {
   if (!raw) return '음식점';
   const parts = raw.split('>').map(s => s.trim()).filter(Boolean);
@@ -51,9 +48,9 @@ function cleanCategory(raw) {
   return filtered.slice(0, 2).join(' · ') || parts[0] || '음식점';
 }
 
-// 네이버 Local Search API 단일 호출
-async function naverSearch(query, clientId, clientSecret, start) {
-  const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=5&start=${start}&sort=comment`;
+// 네이버 Local Search API 호출 (display=5 고정)
+async function naverSearch(query, clientId, clientSecret) {
+  const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=5&start=1&sort=comment`;
   const res = await fetch(url, {
     headers: {
       'X-Naver-Client-Id': clientId,
@@ -64,7 +61,8 @@ async function naverSearch(query, clientId, clientSecret, start) {
     const text = await res.text();
     throw new Error(`네이버 API 오류 (${res.status}): ${text}`);
   }
-  return res.json();
+  const data = await res.json();
+  return data.items || [];
 }
 
 export default async function handler(req, res) {
@@ -89,21 +87,18 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: '서버 설정 오류입니다. (네이버 API 키 미설정)' });
   }
 
-  const query = `${region.trim()} 맛집`;
+  const q = region.trim();
 
   try {
-    // 3번 병렬 호출 → 최대 15개 수집 (start: 1, 6, 11)
+    // ✅ 핵심: 키워드 3종으로 병렬 호출 → 각 5개씩 → 합쳐서 중복 제거 → 최대 15개
     const [r1, r2, r3] = await Promise.all([
-      naverSearch(query, clientId, clientSecret, 1),
-      naverSearch(query, clientId, clientSecret, 6),
-      naverSearch(query, clientId, clientSecret, 11),
+      naverSearch(`${q} 맛집`, clientId, clientSecret),
+      naverSearch(`${q} 음식점`, clientId, clientSecret),
+      naverSearch(`${q} 식당`, clientId, clientSecret),
     ]);
 
-    const allItems = [
-      ...(r1.items || []),
-      ...(r2.items || []),
-      ...(r3.items || []),
-    ];
+    // 합치기
+    const allItems = [...r1, ...r2, ...r3];
 
     if (!allItems.length) {
       return res.status(200).json({
@@ -128,9 +123,7 @@ export default async function handler(req, res) {
         category: cleanCategory(rawCat),
         emoji: categoryToEmoji(rawCat),
         address: item.roadAddress || item.address || '',
-        naverUrl: item.link || '',   // 네이버 플레이스 직접 링크
-        mapx: item.mapx || '',       // 좌표 (카카오/구글 지도 검색용)
-        mapy: item.mapy || '',
+        naverUrl: item.link || '',
       };
     });
 
