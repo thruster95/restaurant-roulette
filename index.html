@@ -231,69 +231,83 @@ function showResult(){
   card.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
-// 로딩 스텝 UI 업데이트
-const STEP_LABELS=['🍚 한식','🍝 양식','🥟 중식','🥩 고기집','🍽️ 기타 맛집'];
-function setStep(idx){
-  for(let i=0;i<5;i++){
-    const el=document.getElementById('step-'+i);
-    if(!el)continue;
-    el.className='load-step-item'+(i<idx?' done':i===idx?' active':'');
+// 5개 카테고리 순서대로 정의
+const CATEGORIES = [
+  { keyword: '한식',  emoji: '🍚', label: '한식' },
+  { keyword: '양식',  emoji: '🍝', label: '양식' },
+  { keyword: '중식',  emoji: '🥟', label: '중식' },
+  { keyword: '고기집', emoji: '🥩', label: '고기집' },
+  { keyword: '맛집',  emoji: '🍽️', label: '기타 맛집' },
+];
+
+function setStep(activeIdx) {
+  for (let i = 0; i < 5; i++) {
+    const el = document.getElementById('step-' + i);
+    if (!el) continue;
+    if (i < activeIdx)       el.className = 'load-step-item done';
+    else if (i === activeIdx) el.className = 'load-step-item active';
+    else                      el.className = 'load-step-item';
   }
 }
 
-async function searchRestaurants(region){
+async function searchRestaurants(region) {
   showScreen('loading-screen');
-  document.getElementById('load-region').textContent=region;
+  document.getElementById('load-region').textContent = region;
   document.getElementById('err-msg').classList.add('hidden');
   setStep(0);
 
-  try{
-    // 서버에 요청 (서버에서 5개 카테고리 순차 검색)
-    // 로딩 UI는 타이머로 순서대로 활성화
-    let stepIdx=0;
-    const stepTimer=setInterval(()=>{
-      stepIdx=Math.min(stepIdx+1,4);
-      setStep(stepIdx);
-    },900);
+  const allItems = [];
+  const seenNames = new Set();
 
-    const resp=await fetch('/api/search',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({region})
-    });
+  // ✅ 프론트에서 카테고리별로 5번 순차 요청
+  for (let i = 0; i < CATEGORIES.length; i++) {
+    setStep(i);
+    const cat = CATEGORIES[i];
 
-    clearInterval(stepTimer);
-    // 완료 표시
-    for(let i=0;i<5;i++){
-      const el=document.getElementById('step-'+i);
-      if(el)el.className='load-step-item done';
+    try {
+      const resp = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ region, keyword: cat.keyword })
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        const items = data.items || [];
+        // 중복 제거하며 누적
+        for (const item of items) {
+          if (!seenNames.has(item.name)) {
+            seenNames.add(item.name);
+            allItems.push(item);
+          }
+        }
+      }
+    } catch (e) {
+      // 한 카테고리 실패해도 다음 카테고리 계속 진행
+      console.warn(`카테고리 ${cat.label} 검색 실패:`, e.message);
     }
 
-    if(!resp.ok){
-      const err=await resp.json().catch(()=>({}));
-      throw new Error(err.error||`서버 오류 (${resp.status})`);
-    }
-    const data=await resp.json();
-    restaurants=data.restaurants||[];
-
-    if(!restaurants.length){
-      throw new Error(data.message||'검색 결과가 없어요. 다른 지역명을 입력해보세요.');
-    }
-
-    currentAngle=0; drawWheel(0);
-    document.getElementById('roulette-region').textContent=region;
-    document.getElementById('roulette-count').textContent=` · ${restaurants.length}개 맛집`;
-    document.getElementById('result-card').style.display='none';
-    showScreen('roulette-screen');
-
-  }catch(e){
-    showScreen('roulette-screen');
-    const err=document.getElementById('err-msg');
-    err.classList.remove('hidden');
-    err.textContent='검색 실패: '+(e.message||'알 수 없는 오류');
-    document.getElementById('roulette-region').textContent=region;
-    document.getElementById('roulette-count').textContent='';
+    // 마지막 스텝 완료 표시
+    if (i === CATEGORIES.length - 1) setStep(5);
   }
+
+  restaurants = allItems;
+
+  if (!restaurants.length) {
+    showScreen('roulette-screen');
+    const err = document.getElementById('err-msg');
+    err.classList.remove('hidden');
+    err.textContent = '검색 결과가 없어요. 다른 지역명을 입력해보세요.';
+    document.getElementById('roulette-region').textContent = region;
+    document.getElementById('roulette-count').textContent = '';
+    return;
+  }
+
+  currentAngle = 0; drawWheel(0);
+  document.getElementById('roulette-region').textContent = region;
+  document.getElementById('roulette-count').textContent = ` · ${restaurants.length}개 맛집`;
+  document.getElementById('result-card').style.display = 'none';
+  showScreen('roulette-screen');
 }
 
 function doSearch(){
