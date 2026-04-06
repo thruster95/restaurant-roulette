@@ -55,6 +55,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sa
 .res-rating-row{display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px;}
 #res-rating{font-size:16px;font-weight:600;color:#ff6b35;}
 #res-reviews{font-size:13px;color:#bbb;}
+#res-desc{font-size:13px;color:#ff6b35;font-weight:500;margin-bottom:4px;}
 #res-menu{font-size:13px;color:#666;line-height:1.7;margin-bottom:6px;}
 #res-addr{font-size:12px;color:#bbb;margin-bottom:16px;}
 .map-btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
@@ -73,9 +74,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sa
   <!-- 검색 화면 -->
   <div id="search-screen" class="screen">
     <div style="text-align:center;">
-      <div class="badge">네이버 플레이스 별점순</div>
+      <div class="badge">AI 맛집 큐레이션</div>
       <div class="logo">🎡 맛집 룰렛</div>
-      <div class="sub">지역을 입력하면 네이버 플레이스에서<br>별점 높은 맛집 15개로 룰렛을 만들어요!</div>
+      <div class="sub">지역을 입력하면 AI가 별점 · 리뷰 기반으로<br>검증된 맛집 15개를 골라드려요!</div>
     </div>
     <div class="input-row">
       <input id="region-input" type="text" placeholder="예: 홍대입구역, 성수동, 강남역..." />
@@ -101,7 +102,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sa
     <div class="spinner"></div>
     <div class="load-txt">
       <span class="load-region" id="load-region"></span> 맛집 검색 중...
-      <div class="load-sub">네이버 플레이스에서 별점 높은 순으로 찾는 중이에요</div>
+      <div class="load-sub">AI가 별점 · 리뷰 기반으로 맛집을 선별하는 중이에요</div>
     </div>
   </div>
 
@@ -127,6 +128,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sa
         <span id="res-rating"></span>
         <span id="res-reviews"></span>
       </div>
+      <div id="res-desc"></div>
       <div id="res-menu"></div>
       <div id="res-addr"></div>
       <div class="map-btns">
@@ -222,6 +224,7 @@ function showResult(){
     reviewsEl.textContent='';
   }
 
+  document.getElementById('res-desc').textContent=r.description||'';
   document.getElementById('res-menu').textContent=r.menu?'대표 메뉴: '+r.menu:'';
   document.getElementById('res-addr').textContent=r.address||'';
 
