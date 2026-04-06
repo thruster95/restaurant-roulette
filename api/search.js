@@ -1,7 +1,7 @@
 // api/search.js - Vercel Serverless Function
 // ✅ 네이버 공식 Local Search API
-// ✅ 3번 병렬 요청 후 합산, 15개 미달 시 추가 요청으로 보충
-// ✅ 무조건 최대 15개 반환
+// ✅ 5개 카테고리 순차 검색 → 합산 → 중복 제거 → 룰렛
+// 검색 순서: 한식 → 양식 → 중식 → 고기집 → 기타
 // 필요 환경변수: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET
 
 const rateLimit = new Map();
@@ -48,7 +48,7 @@ function cleanCategory(raw) {
   return filtered.slice(0, 2).join(' · ') || parts[0] || '음식점';
 }
 
-// 네이버 Local Search API 호출 (display=5 고정)
+// 네이버 Local Search API 단일 호출
 async function naverSearch(query, clientId, clientSecret) {
   const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=5&start=1&sort=comment`;
   const res = await fetch(url, {
@@ -58,8 +58,9 @@ async function naverSearch(query, clientId, clientSecret) {
     }
   });
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`네이버 API 오류 (${res.status}): ${text}`);
+    // 에러여도 빈 배열 반환 (한 카테고리 실패가 전체를 막지 않도록)
+    console.error(`네이버 API 오류 (${res.status}) for query: ${query}`);
+    return [];
   }
   const data = await res.json();
   return data.items || [];
@@ -76,7 +77,6 @@ function dedupe(items) {
   });
 }
 
-// 아이템 → 결과 포맷 변환
 function formatItem(item) {
   const rawCat = item.category || '';
   return {
@@ -112,42 +112,34 @@ export default async function handler(req, res) {
 
   const q = region.trim();
 
-  // 키워드 목록 (다양하게 준비 → 중복 최소화)
+  // ✅ 5개 카테고리 키워드 (순서대로 검색)
   const keywords = [
-    `${q} 맛집`,
-    `${q} 한식 맛집`,
-    `${q} 일식 맛집`,
-    `${q} 양식 맛집`,
-    `${q} 고기 맛집`,
+    `${q} 한식`,
+    `${q} 양식`,
+    `${q} 중식`,
+    `${q} 고기집`,
+    `${q} 맛집`,   // 기타 (위에서 못 잡은 것들)
   ];
 
   try {
-    // ── 1단계: 3개 병렬 요청 ─────────────────────────────────────────
-    const [r1, r2, r3] = await Promise.all([
-      naverSearch(keywords[0], clientId, clientSecret),
-      naverSearch(keywords[1], clientId, clientSecret),
-      naverSearch(keywords[2], clientId, clientSecret),
-    ]);
-
-    let collected = dedupe([...r1, ...r2, ...r3]);
-
-    // ── 2단계: 15개 미달이면 추가 2개 요청으로 보충 ──────────────────
-    if (collected.length < 15) {
-      const [r4, r5] = await Promise.all([
-        naverSearch(keywords[3], clientId, clientSecret),
-        naverSearch(keywords[4], clientId, clientSecret),
-      ]);
-      collected = dedupe([...collected, ...r4, ...r5]);
+    // ── 순차 검색 (차례차례 → await으로 하나씩) ──────────────────────
+    const results = [];
+    for (const keyword of keywords) {
+      const items = await naverSearch(keyword, clientId, clientSecret);
+      results.push(...items);
     }
 
-    if (!collected.length) {
+    // 전체 합산 후 중복 제거
+    const unique = dedupe(results);
+
+    if (!unique.length) {
       return res.status(200).json({
         restaurants: [],
         message: '검색 결과가 없어요. 지역명을 더 구체적으로 입력해보세요. (예: 강남역, 홍대입구역)'
       });
     }
 
-    const restaurants = collected.slice(0, 15).map(formatItem);
+    const restaurants = unique.map(formatItem);
     return res.status(200).json({ restaurants });
 
   } catch (err) {
