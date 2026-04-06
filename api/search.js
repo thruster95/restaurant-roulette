@@ -1,12 +1,11 @@
 // api/search.js - Vercel Serverless Function
-// ✅ 네이버 공식 Local Search API
-// ✅ 5개 카테고리 순차 검색 → 합산 → 중복 제거 → 룰렛
-// 검색 순서: 한식 → 양식 → 중식 → 고기집 → 기타
+// ✅ 카테고리 1개만 검색해서 반환 (빠름, 타임아웃 없음)
+// ✅ 프론트에서 5번 호출해서 누적
 // 필요 환경변수: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET
 
 const rateLimit = new Map();
 const RATE_LIMIT_WINDOW = 60 * 1000;
-const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_MAX = 30; // 5번씩 호출하므로 여유있게
 
 function checkRateLimit(ip) {
   const now = Date.now();
@@ -48,46 +47,6 @@ function cleanCategory(raw) {
   return filtered.slice(0, 2).join(' · ') || parts[0] || '음식점';
 }
 
-// 네이버 Local Search API 단일 호출
-async function naverSearch(query, clientId, clientSecret) {
-  const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=5&start=1&sort=comment`;
-  const res = await fetch(url, {
-    headers: {
-      'X-Naver-Client-Id': clientId,
-      'X-Naver-Client-Secret': clientSecret,
-    }
-  });
-  if (!res.ok) {
-    // 에러여도 빈 배열 반환 (한 카테고리 실패가 전체를 막지 않도록)
-    console.error(`네이버 API 오류 (${res.status}) for query: ${query}`);
-    return [];
-  }
-  const data = await res.json();
-  return data.items || [];
-}
-
-// 중복 제거 (식당명 기준)
-function dedupe(items) {
-  const seen = new Set();
-  return items.filter(item => {
-    const name = stripTags(item.title);
-    if (seen.has(name)) return false;
-    seen.add(name);
-    return true;
-  });
-}
-
-function formatItem(item) {
-  const rawCat = item.category || '';
-  return {
-    name: stripTags(item.title),
-    category: cleanCategory(rawCat),
-    emoji: categoryToEmoji(rawCat),
-    address: item.roadAddress || item.address || '',
-    naverUrl: item.link || '',
-  };
-}
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -96,54 +55,45 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: '허용되지 않는 메서드입니다.' });
 
   const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || 'unknown';
-  if (!checkRateLimit(ip)) return res.status(429).json({ error: '요청이 너무 많아요. 1분 후 다시 시도해주세요.' });
+  if (!checkRateLimit(ip)) return res.status(429).json({ error: '잠시 후 다시 시도해주세요.' });
 
-  const { region } = req.body || {};
-  if (!region || typeof region !== 'string' || !region.trim()) {
-    return res.status(400).json({ error: '지역명을 입력해주세요.' });
-  }
-  if (region.length > 50) return res.status(400).json({ error: '지역명이 너무 길어요.' });
+  const { region, keyword } = req.body || {};
+  if (!region || !keyword) return res.status(400).json({ error: '파라미터가 없어요.' });
 
   const clientId = process.env.NAVER_CLIENT_ID;
   const clientSecret = process.env.NAVER_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    return res.status(500).json({ error: '서버 설정 오류입니다. (네이버 API 키 미설정)' });
-  }
-
-  const q = region.trim();
-
-  // ✅ 5개 카테고리 키워드 (순서대로 검색)
-  const keywords = [
-    `${q} 한식`,
-    `${q} 양식`,
-    `${q} 중식`,
-    `${q} 고기집`,
-    `${q} 맛집`,   // 기타 (위에서 못 잡은 것들)
-  ];
+  if (!clientId || !clientSecret) return res.status(500).json({ error: '서버 설정 오류입니다.' });
 
   try {
-    // ── 순차 검색 (차례차례 → await으로 하나씩) ──────────────────────
-    const results = [];
-    for (const keyword of keywords) {
-      const items = await naverSearch(keyword, clientId, clientSecret);
-      results.push(...items);
+    const query = `${region.trim()} ${keyword.trim()}`;
+    const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=5&start=1&sort=comment`;
+    const naverRes = await fetch(url, {
+      headers: {
+        'X-Naver-Client-Id': clientId,
+        'X-Naver-Client-Secret': clientSecret,
+      }
+    });
+
+    if (!naverRes.ok) {
+      return res.status(200).json({ items: [] }); // 실패해도 빈 배열 반환 (프론트에서 계속 진행)
     }
 
-    // 전체 합산 후 중복 제거
-    const unique = dedupe(results);
+    const data = await naverRes.json();
+    const items = (data.items || []).map(item => {
+      const rawCat = item.category || '';
+      return {
+        name: stripTags(item.title),
+        category: cleanCategory(rawCat),
+        emoji: categoryToEmoji(rawCat),
+        address: item.roadAddress || item.address || '',
+        naverUrl: item.link || '',
+      };
+    });
 
-    if (!unique.length) {
-      return res.status(200).json({
-        restaurants: [],
-        message: '검색 결과가 없어요. 지역명을 더 구체적으로 입력해보세요. (예: 강남역, 홍대입구역)'
-      });
-    }
-
-    const restaurants = unique.map(formatItem);
-    return res.status(200).json({ restaurants });
+    return res.status(200).json({ items });
 
   } catch (err) {
     console.error('Handler error:', err.message);
-    return res.status(500).json({ error: err.message || '서버 오류가 발생했어요. 잠시 후 다시 시도해주세요.' });
+    return res.status(200).json({ items: [] }); // 실패해도 빈 배열 반환
   }
 }
