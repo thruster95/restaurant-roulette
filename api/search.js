@@ -1,7 +1,7 @@
 // api/search.js - Vercel Serverless Function
-// ✅ 네이버 공식 Local Search API 사용
-// ✅ 키워드 3종 병렬 호출로 15개 확보 (display=5 제한 우회)
-// ✅ 빠름 (300~500ms), 안정적, 완전 무료
+// ✅ 네이버 공식 Local Search API
+// ✅ 3번 병렬 요청 후 합산, 15개 미달 시 추가 요청으로 보충
+// ✅ 무조건 최대 15개 반환
 // 필요 환경변수: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET
 
 const rateLimit = new Map();
@@ -65,6 +65,29 @@ async function naverSearch(query, clientId, clientSecret) {
   return data.items || [];
 }
 
+// 중복 제거 (식당명 기준)
+function dedupe(items) {
+  const seen = new Set();
+  return items.filter(item => {
+    const name = stripTags(item.title);
+    if (seen.has(name)) return false;
+    seen.add(name);
+    return true;
+  });
+}
+
+// 아이템 → 결과 포맷 변환
+function formatItem(item) {
+  const rawCat = item.category || '';
+  return {
+    name: stripTags(item.title),
+    category: cleanCategory(rawCat),
+    emoji: categoryToEmoji(rawCat),
+    address: item.roadAddress || item.address || '',
+    naverUrl: item.link || '',
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -89,44 +112,42 @@ export default async function handler(req, res) {
 
   const q = region.trim();
 
+  // 키워드 목록 (다양하게 준비 → 중복 최소화)
+  const keywords = [
+    `${q} 맛집`,
+    `${q} 한식 맛집`,
+    `${q} 일식 맛집`,
+    `${q} 양식 맛집`,
+    `${q} 고기 맛집`,
+  ];
+
   try {
-    // ✅ 핵심: 키워드 3종으로 병렬 호출 → 각 5개씩 → 합쳐서 중복 제거 → 최대 15개
+    // ── 1단계: 3개 병렬 요청 ─────────────────────────────────────────
     const [r1, r2, r3] = await Promise.all([
-      naverSearch(`${q} 맛집`, clientId, clientSecret),
-      naverSearch(`${q} 음식점`, clientId, clientSecret),
-      naverSearch(`${q} 식당`, clientId, clientSecret),
+      naverSearch(keywords[0], clientId, clientSecret),
+      naverSearch(keywords[1], clientId, clientSecret),
+      naverSearch(keywords[2], clientId, clientSecret),
     ]);
 
-    // 합치기
-    const allItems = [...r1, ...r2, ...r3];
+    let collected = dedupe([...r1, ...r2, ...r3]);
 
-    if (!allItems.length) {
+    // ── 2단계: 15개 미달이면 추가 2개 요청으로 보충 ──────────────────
+    if (collected.length < 15) {
+      const [r4, r5] = await Promise.all([
+        naverSearch(keywords[3], clientId, clientSecret),
+        naverSearch(keywords[4], clientId, clientSecret),
+      ]);
+      collected = dedupe([...collected, ...r4, ...r5]);
+    }
+
+    if (!collected.length) {
       return res.status(200).json({
         restaurants: [],
         message: '검색 결과가 없어요. 지역명을 더 구체적으로 입력해보세요. (예: 강남역, 홍대입구역)'
       });
     }
 
-    // 중복 제거 (같은 식당명)
-    const seen = new Set();
-    const unique = allItems.filter(item => {
-      const name = stripTags(item.title);
-      if (seen.has(name)) return false;
-      seen.add(name);
-      return true;
-    });
-
-    const restaurants = unique.slice(0, 15).map(item => {
-      const rawCat = item.category || '';
-      return {
-        name: stripTags(item.title),
-        category: cleanCategory(rawCat),
-        emoji: categoryToEmoji(rawCat),
-        address: item.roadAddress || item.address || '',
-        naverUrl: item.link || '',
-      };
-    });
-
+    const restaurants = collected.slice(0, 15).map(formatItem);
     return res.status(200).json({ restaurants });
 
   } catch (err) {
