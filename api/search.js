@@ -1,12 +1,12 @@
 // api/search.js - Vercel Serverless Function
-// ✅ AI(GPT-4o) 자체 지식으로 별점/리뷰 기반 맛집 추천
-// ✅ 웹 검색 없음 → 빠르고 안정적 (1~3초)
-// ✅ response_format: json_object 로 JSON 100% 보장
-// 필요 환경변수: OPENAI_API_KEY
+// ✅ 네이버 공식 Local Search API 사용
+// ✅ 빠름 (300~500ms), 안정적, 완전 무료
+// ✅ 3번 병렬 호출로 최대 15개 수집
+// 필요 환경변수: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET
 
 const rateLimit = new Map();
-const RATE_LIMIT_WINDOW = 60 * 1000;
-const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1분
+const RATE_LIMIT_MAX = 10;           // 분당 최대 10회
 
 function checkRateLimit(ip) {
   const now = Date.now();
@@ -15,6 +15,56 @@ function checkRateLimit(ip) {
   record.count++;
   rateLimit.set(ip, record);
   return record.count <= RATE_LIMIT_MAX;
+}
+
+// 네이버 HTML 태그 제거 (<b>, </b> 등)
+function stripTags(str) {
+  return (str || '').replace(/<[^>]*>/g, '').trim();
+}
+
+// 카테고리 → 이모지
+function categoryToEmoji(cat) {
+  if (!cat) return '🍽️';
+  if (cat.includes('한식')) return '🍚';
+  if (cat.includes('일식') || cat.includes('스시') || cat.includes('초밥') || cat.includes('라멘')) return '🍣';
+  if (cat.includes('중식') || cat.includes('중국')) return '🥟';
+  if (cat.includes('양식') || cat.includes('이탈리') || cat.includes('스테이크') || cat.includes('파스타')) return '🍝';
+  if (cat.includes('카페') || cat.includes('커피') || cat.includes('디저트') || cat.includes('베이커리')) return '☕';
+  if (cat.includes('치킨')) return '🍗';
+  if (cat.includes('피자')) return '🍕';
+  if (cat.includes('버거') || cat.includes('햄버거')) return '🍔';
+  if (cat.includes('분식') || cat.includes('떡볶') || cat.includes('순대')) return '🍢';
+  if (cat.includes('해산물') || cat.includes('횟집') || cat.includes('조개') || cat.includes('게')) return '🐟';
+  if (cat.includes('고기') || cat.includes('구이') || cat.includes('삼겹') || cat.includes('갈비') || cat.includes('곱창')) return '🥩';
+  if (cat.includes('국밥') || cat.includes('설렁탕') || cat.includes('해장')) return '🍲';
+  if (cat.includes('베트남') || cat.includes('태국') || cat.includes('인도') || cat.includes('아시아')) return '🌏';
+  if (cat.includes('술집') || cat.includes('이자카야') || cat.includes('포차') || cat.includes('호프')) return '🍺';
+  if (cat.includes('냉면') || cat.includes('국수') || cat.includes('칼국수')) return '🍜';
+  return '🍽️';
+}
+
+// 카테고리 정리: "음식점 > 한식 > 삼겹살" → "한식 · 삼겹살"
+function cleanCategory(raw) {
+  if (!raw) return '음식점';
+  const parts = raw.split('>').map(s => s.trim()).filter(Boolean);
+  const filtered = parts.filter(p => p !== '음식점' && p !== '카페');
+  return filtered.slice(0, 2).join(' · ') || parts[0] || '음식점';
+}
+
+// 네이버 Local Search API 단일 호출
+async function naverSearch(query, clientId, clientSecret, start) {
+  const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=5&start=${start}&sort=comment`;
+  const res = await fetch(url, {
+    headers: {
+      'X-Naver-Client-Id': clientId,
+      'X-Naver-Client-Secret': clientSecret,
+    }
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`네이버 API 오류 (${res.status}): ${text}`);
+  }
+  return res.json();
 }
 
 export default async function handler(req, res) {
@@ -28,79 +78,66 @@ export default async function handler(req, res) {
   if (!checkRateLimit(ip)) return res.status(429).json({ error: '요청이 너무 많아요. 1분 후 다시 시도해주세요.' });
 
   const { region } = req.body || {};
-  if (!region || typeof region !== 'string' || !region.trim()) return res.status(400).json({ error: '지역명을 입력해주세요.' });
+  if (!region || typeof region !== 'string' || !region.trim()) {
+    return res.status(400).json({ error: '지역명을 입력해주세요.' });
+  }
   if (region.length > 50) return res.status(400).json({ error: '지역명이 너무 길어요.' });
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: '서버 설정 오류입니다.' });
+  const clientId = process.env.NAVER_CLIENT_ID;
+  const clientSecret = process.env.NAVER_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    return res.status(500).json({ error: '서버 설정 오류입니다. (네이버 API 키 미설정)' });
+  }
 
-  const q = region.trim();
+  const query = `${region.trim()} 맛집`;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'system',
-            content: `당신은 한국 맛집 전문가입니다. 
-사용자가 지역명을 주면, 그 지역에서 실제로 유명하고 평판이 좋은 맛집을 추천해주세요.
-네이버 플레이스, 카카오맵, 망고플레이트 등에서 별점이 높고 리뷰가 많은 식당을 기준으로 선정하세요.
-다양한 음식 종류(한식, 일식, 중식, 양식, 카페 등)를 골고루 포함하세요.
+    // 3번 병렬 호출 → 최대 15개 수집 (start: 1, 6, 11)
+    const [r1, r2, r3] = await Promise.all([
+      naverSearch(query, clientId, clientSecret, 1),
+      naverSearch(query, clientId, clientSecret, 6),
+      naverSearch(query, clientId, clientSecret, 11),
+    ]);
 
-반드시 아래 JSON 형식으로만 응답하세요:
-{
-  "restaurants": [
-    {
-      "name": "식당명",
-      "category": "음식 카테고리 (예: 한식, 일식, 중식, 양식, 카페 등)",
-      "menu": "대표 메뉴 2~3가지",
-      "address": "도로명 주소 또는 동 주소",
-      "rating": "네이버/카카오 기준 예상 별점 (예: 4.5)",
-      "reviews": "리뷰 수 또는 평판 (예: 리뷰 2,300개 이상 / 줄서는 맛집 등)",
-      "description": "한 줄 특징 (예: 20년 전통의 손칼국수, 웨이팅 필수)"
+    const allItems = [
+      ...(r1.items || []),
+      ...(r2.items || []),
+      ...(r3.items || []),
+    ];
+
+    if (!allItems.length) {
+      return res.status(200).json({
+        restaurants: [],
+        message: '검색 결과가 없어요. 지역명을 더 구체적으로 입력해보세요. (예: 강남역, 홍대입구역)'
+      });
     }
-  ]
-}`
-          },
-          {
-            role: 'user',
-            content: `"${q}" 주변에서 별점 높고 유명한 맛집 15개를 추천해주세요. 실제로 존재하는 식당만 알려주세요.`
-          }
-        ]
-      })
+
+    // 중복 제거 (같은 식당명)
+    const seen = new Set();
+    const unique = allItems.filter(item => {
+      const name = stripTags(item.title);
+      if (seen.has(name)) return false;
+      seen.add(name);
+      return true;
     });
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      if (response.status === 429) throw new Error('AI 요청 한도 초과. 잠시 후 다시 시도해주세요.');
-      throw new Error(err?.error?.message || `API 오류 (${response.status})`);
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
-
-    let parsed;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      throw new Error('결과 변환에 실패했어요. 다시 시도해주세요.');
-    }
-
-    const restaurants = (parsed.restaurants || []).slice(0, 15);
-    if (!restaurants.length) throw new Error('맛집을 찾지 못했어요. 다른 지역명을 입력해보세요.');
+    const restaurants = unique.slice(0, 15).map(item => {
+      const rawCat = item.category || '';
+      return {
+        name: stripTags(item.title),
+        category: cleanCategory(rawCat),
+        emoji: categoryToEmoji(rawCat),
+        address: item.roadAddress || item.address || '',
+        naverUrl: item.link || '',   // 네이버 플레이스 직접 링크
+        mapx: item.mapx || '',       // 좌표 (카카오/구글 지도 검색용)
+        mapy: item.mapy || '',
+      };
+    });
 
     return res.status(200).json({ restaurants });
 
   } catch (err) {
     console.error('Handler error:', err.message);
-    if (err.message === 'RATE_LIMIT') return res.status(429).json({ error: 'AI 서비스 요청 한도 초과. 잠시 후 다시 시도해주세요.' });
     return res.status(500).json({ error: err.message || '서버 오류가 발생했어요. 잠시 후 다시 시도해주세요.' });
   }
 }
