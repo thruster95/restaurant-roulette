@@ -1,5 +1,7 @@
-// api/search.js - Vercel Serverless Function (디버그 버전)
-// ✅ mode=location : 카카오 로컬 API (위치 기반 반경 1km, 정확도순, 최대 90개)
+// api/search.js - Vercel Serverless Function
+// ✅ mode=location : 카카오 로컬 API (위치 기반 반경 1km, 정확도순)
+//    - 테스트 앱 기준 size=15 (최대값)
+//    - page 1~3 병렬 호출 → 최대 45개
 // ✅ mode=region   : 네이버 Local Search API (지역명 텍스트 검색)
 // 환경변수: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET, KAKAO_REST_API_KEY
 
@@ -63,6 +65,8 @@ function formatKakaoDoc(doc) {
   };
 }
 
+// 카카오 단일 페이지 호출
+// ✅ 테스트 앱 최대값 size=15 사용
 async function kakaoSearchPage(lat, lng, page, kakaoKey) {
   const url =
     `https://dapi.kakao.com/v2/local/search/keyword.json` +
@@ -70,32 +74,26 @@ async function kakaoSearchPage(lat, lng, page, kakaoKey) {
     `&x=${lng}&y=${lat}` +
     `&radius=1000` +
     `&sort=accuracy` +
-    `&size=30` +
+    `&size=15` +
     `&page=${page}`;
 
   const res = await fetch(url, {
     headers: { 'Authorization': `KakaoAK ${kakaoKey}` }
   });
 
-  const responseText = await res.text();
-
-  // ✅ 디버그: 카카오 API 응답 전체 로깅
-  console.log(`[카카오 page${page}] status=${res.status}`);
-  console.log(`[카카오 page${page}] response=${responseText.slice(0, 300)}`);
-
   if (!res.ok) {
-    return { documents: [], isEnd: true, debugStatus: res.status, debugBody: responseText.slice(0, 200) };
+    console.error(`카카오 API 오류 page${page}: ${res.status}`);
+    return { documents: [], isEnd: true };
   }
 
-  const data = JSON.parse(responseText);
+  const data = await res.json();
   return {
     documents: data.documents || [],
     isEnd: data.meta?.is_end ?? true,
-    debugTotal: data.meta?.total_count,
-    debugPageable: data.meta?.pageable_count,
   };
 }
 
+// 카카오 위치 기반 검색 - page 1~3 병렬 호출 (최대 45개)
 async function searchByLocation(lat, lng, kakaoKey) {
   const [p1, p2, p3] = await Promise.all([
     kakaoSearchPage(lat, lng, 1, kakaoKey),
@@ -103,16 +101,13 @@ async function searchByLocation(lat, lng, kakaoKey) {
     kakaoSearchPage(lat, lng, 3, kakaoKey),
   ]);
 
-  console.log(`[결과] p1=${p1.documents.length}개 isEnd=${p1.isEnd} total=${p1.debugTotal}`);
-  console.log(`[결과] p2=${p2.documents.length}개 isEnd=${p2.isEnd}`);
-  console.log(`[결과] p3=${p3.documents.length}개 isEnd=${p3.isEnd}`);
-
   const allDocs = [
     ...p1.documents,
     ...(p1.isEnd ? [] : p2.documents),
     ...(p1.isEnd || p2.isEnd ? [] : p3.documents),
   ];
 
+  // 중복 제거
   const seen = new Set();
   const unique = allDocs.filter(doc => {
     const key = doc.id || doc.place_name;
@@ -121,22 +116,10 @@ async function searchByLocation(lat, lng, kakaoKey) {
     return true;
   });
 
-  return {
-    items: unique.map(formatKakaoDoc),
-    // ✅ 디버그 정보 포함
-    debug: {
-      lat, lng,
-      p1_count: p1.documents.length,
-      p1_isEnd: p1.isEnd,
-      p1_total: p1.debugTotal,
-      p1_status: p1.debugStatus,
-      p1_error: p1.debugBody,
-      total_before_dedup: allDocs.length,
-      total_after_dedup: unique.length,
-    }
-  };
+  return unique.map(formatKakaoDoc);
 }
 
+// 네이버 지역명 검색
 async function searchByRegion(region, keyword, clientId, clientSecret) {
   const query = `${region} ${keyword}`;
   const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=5&start=1&sort=comment`;
@@ -146,7 +129,10 @@ async function searchByRegion(region, keyword, clientId, clientSecret) {
       'X-Naver-Client-Secret': clientSecret,
     }
   });
-  if (!res.ok) return [];
+  if (!res.ok) {
+    console.error(`네이버 API 오류: ${res.status}`);
+    return [];
+  }
   const data = await res.json();
   return (data.items || []).map(item => ({
     name: stripTags(item.title),
@@ -172,37 +158,33 @@ export default async function handler(req, res) {
   const { mode, region, keyword, lat, lng } = req.body || {};
 
   try {
+    let items = [];
+
     if (mode === 'location') {
       const kakaoKey = process.env.KAKAO_REST_API_KEY;
       if (!kakaoKey) {
         return res.status(500).json({ error: '카카오 API 키가 설정되지 않았어요.' });
       }
-
-      // ✅ lat/lng NaN 체크
       const latNum = parseFloat(lat);
       const lngNum = parseFloat(lng);
       if (isNaN(latNum) || isNaN(lngNum)) {
-        return res.status(400).json({ error: `위도/경도 값이 올바르지 않아요. lat=${lat}, lng=${lng}` });
+        return res.status(400).json({ error: '위치 정보가 올바르지 않아요.' });
       }
-
-      console.log(`[요청] mode=location lat=${latNum} lng=${lngNum}`);
-
-      const { items, debug } = await searchByLocation(latNum, lngNum, kakaoKey);
-
-      console.log(`[완료] items=${items.length}개`);
-
-      // ✅ 결과가 0개여도 debug 정보 포함해서 반환
-      return res.status(200).json({ items, debug });
+      items = await searchByLocation(latNum, lngNum, kakaoKey);
 
     } else {
       const clientId = process.env.NAVER_CLIENT_ID;
       const clientSecret = process.env.NAVER_CLIENT_SECRET;
-      if (!clientId || !clientSecret) return res.status(500).json({ error: '네이버 API 키가 설정되지 않았어요.' });
-      if (!region || !keyword) return res.status(400).json({ error: '파라미터가 없어요.' });
-
-      const items = await searchByRegion(region, keyword, clientId, clientSecret);
-      return res.status(200).json({ items });
+      if (!clientId || !clientSecret) {
+        return res.status(500).json({ error: '네이버 API 키가 설정되지 않았어요.' });
+      }
+      if (!region || !keyword) {
+        return res.status(400).json({ error: '파라미터가 없어요.' });
+      }
+      items = await searchByRegion(region, keyword, clientId, clientSecret);
     }
+
+    return res.status(200).json({ items });
 
   } catch (err) {
     console.error('Handler error:', err.message);
