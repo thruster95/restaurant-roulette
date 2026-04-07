@@ -1,14 +1,15 @@
 // api/search.js - Vercel Serverless Function
-// ✅ 두 가지 모드:
-//    mode=region  → 네이버 Local Search API (지역명 텍스트 검색)
-//    mode=location → 카카오 Local API (현재 위치 반경 1km 검색)
-// 환경변수:
-//    NAVER_CLIENT_ID, NAVER_CLIENT_SECRET  (지역명 검색용)
-//    KAKAO_REST_API_KEY                     (위치 기반 검색용)
+// ✅ mode=location: 카카오 로컬 API
+//    - "맛집" 키워드 + 위도/경도 + radius=1000
+//    - sort=accuracy (정확도순 = 인기/관련도 높은 순)
+//    - size=30, page 1~3 병렬 호출 → 최대 90개
+//    - meta.is_end 로 결과 없으면 조기 종료
+// ✅ mode=region: 네이버 Local Search API (지역명 검색)
+// 환경변수: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET, KAKAO_REST_API_KEY
 
 const rateLimit = new Map();
 const RATE_LIMIT_WINDOW = 60 * 1000;
-const RATE_LIMIT_MAX = 30;
+const RATE_LIMIT_MAX = 20;
 
 function checkRateLimit(ip) {
   const now = Date.now();
@@ -50,7 +51,76 @@ function cleanCategory(raw) {
   return filtered.slice(0, 2).join(' · ') || parts[0] || '음식점';
 }
 
-// ── 네이버 Local Search API (지역명 검색) ─────────────────────────────
+function formatKakaoDoc(doc) {
+  const distNum = parseInt(doc.distance || '0');
+  const distLabel = distNum >= 1000
+    ? `${(distNum / 1000).toFixed(1)}km`
+    : `${distNum}m`;
+  return {
+    name: doc.place_name || '',
+    category: cleanCategory(doc.category_name || ''),
+    emoji: categoryToEmoji(doc.category_name || ''),
+    address: doc.road_address_name || doc.address_name || '',
+    naverUrl: `https://map.naver.com/p/search/${encodeURIComponent(doc.place_name || '')}`,
+    kakaoUrl: doc.place_url || '',
+    distance: distLabel,
+  };
+}
+
+// 카카오 단일 페이지 호출
+async function kakaoSearchPage(lat, lng, page, kakaoKey) {
+  const url = `https://dapi.kakao.com/v2/local/search/keyword.json` +
+    `?query=${encodeURIComponent('맛집')}` +
+    `&x=${lng}&y=${lat}` +
+    `&radius=1000` +
+    `&sort=accuracy` +
+    `&size=30` +
+    `&page=${page}`;
+
+  const res = await fetch(url, {
+    headers: { 'Authorization': `KakaoAK ${kakaoKey}` }
+  });
+
+  if (!res.ok) {
+    console.error(`카카오 API 오류 page${page}:`, res.status, await res.text());
+    return { documents: [], isEnd: true };
+  }
+
+  const data = await res.json();
+  return {
+    documents: data.documents || [],
+    isEnd: data.meta?.is_end ?? true,
+  };
+}
+
+// ── 카카오 로컬 API (위치 기반 반경 1km, 정확도순) ───────────────────
+async function searchByLocation(lat, lng, kakaoKey) {
+  // page 1~3 병렬 호출 (최대 90개)
+  const [p1, p2, p3] = await Promise.all([
+    kakaoSearchPage(lat, lng, 1, kakaoKey),
+    kakaoSearchPage(lat, lng, 2, kakaoKey),
+    kakaoSearchPage(lat, lng, 3, kakaoKey),
+  ]);
+
+  // p1이 끝이면 p2, p3는 빈 배열이므로 자동으로 처리됨
+  const allDocs = [
+    ...p1.documents,
+    ...(p1.isEnd ? [] : p2.documents),
+    ...(p1.isEnd || p2.isEnd ? [] : p3.documents),
+  ];
+
+  // 중복 제거
+  const seen = new Set();
+  const unique = allDocs.filter(doc => {
+    if (seen.has(doc.id)) return false;
+    seen.add(doc.id);
+    return true;
+  });
+
+  return unique.map(formatKakaoDoc);
+}
+
+// ── 네이버 Local Search API (지역명 검색) ────────────────────────────
 async function searchByRegion(region, keyword, clientId, clientSecret) {
   const query = `${region} ${keyword}`;
   const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=5&start=1&sort=comment`;
@@ -73,31 +143,6 @@ async function searchByRegion(region, keyword, clientId, clientSecret) {
   }));
 }
 
-// ── 카카오 로컬 API (위치 기반 반경 검색) ────────────────────────────
-async function searchByLocation(lat, lng, keyword, kakaoKey) {
-  const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(keyword)}&x=${lng}&y=${lat}&radius=1000&sort=distance&size=15&category_group_code=FD6`;
-  const res = await fetch(url, {
-    headers: { 'Authorization': `KakaoAK ${kakaoKey}` }
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.documents || []).map(doc => {
-    const distNum = parseInt(doc.distance || '0');
-    const distLabel = distNum >= 1000
-      ? `${(distNum / 1000).toFixed(1)}km`
-      : `${distNum}m`;
-    return {
-      name: doc.place_name || '',
-      category: cleanCategory(doc.category_name || ''),
-      emoji: categoryToEmoji(doc.category_name || ''),
-      address: doc.road_address_name || doc.address_name || '',
-      naverUrl: `https://map.naver.com/p/search/${encodeURIComponent(doc.place_name)}`,
-      kakaoUrl: doc.place_url || '',
-      distance: distLabel,
-    };
-  });
-}
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -114,15 +159,13 @@ export default async function handler(req, res) {
     let items = [];
 
     if (mode === 'location') {
-      // ── 위치 기반 검색 (카카오) ────────────────────────────────────
       const kakaoKey = process.env.KAKAO_REST_API_KEY;
-      if (!kakaoKey) return res.status(500).json({ error: '카카오 API 키가 설정되지 않았어요.' });
-      if (!lat || !lng || !keyword) return res.status(400).json({ error: '파라미터가 없어요.' });
+      if (!kakaoKey) return res.status(500).json({ error: '카카오 API 키가 설정되지 않았어요. Vercel 환경변수에 KAKAO_REST_API_KEY를 추가해주세요.' });
+      if (!lat || !lng) return res.status(400).json({ error: `위치 정보가 없어요. lat=${lat}, lng=${lng}` });
 
-      items = await searchByLocation(lat, lng, keyword, kakaoKey);
+      items = await searchByLocation(parseFloat(lat), parseFloat(lng), kakaoKey);
 
     } else {
-      // ── 지역명 검색 (네이버) ──────────────────────────────────────
       const clientId = process.env.NAVER_CLIENT_ID;
       const clientSecret = process.env.NAVER_CLIENT_SECRET;
       if (!clientId || !clientSecret) return res.status(500).json({ error: '네이버 API 키가 설정되지 않았어요.' });
@@ -135,6 +178,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('Handler error:', err.message);
-    return res.status(200).json({ items: [] });
+    return res.status(500).json({ error: err.message, items: [] });
   }
 }
