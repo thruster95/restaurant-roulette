@@ -11,48 +11,49 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sa
 .screen{width:100%;max-width:420px;display:flex;flex-direction:column;align-items:center;gap:1.25rem;}
 .hidden{display:none!important;}
 
+/* 검색 화면 */
 .logo{font-size:26px;font-weight:700;color:#1a1a1a;text-align:center;}
 .sub{font-size:14px;color:#888;text-align:center;margin-top:5px;line-height:1.7;}
 .badge{display:inline-flex;align-items:center;padding:3px 10px;font-size:11px;font-weight:600;border-radius:12px;background:#e8f5e9;color:#2e7d32;margin-bottom:4px;}
 
-/* 검색 모드 선택 탭 */
-.mode-tabs{display:flex;gap:0;width:100%;border-radius:12px;overflow:hidden;border:1.5px solid #e0e0e0;background:#fff;}
+.mode-tabs{display:flex;width:100%;border-radius:12px;overflow:hidden;border:1.5px solid #e0e0e0;background:#fff;}
 .mode-tab{flex:1;padding:11px 0;font-size:14px;font-weight:600;border:none;background:transparent;color:#aaa;cursor:pointer;transition:all 0.2s;text-align:center;}
 .mode-tab.active{background:#03C75A;color:#fff;}
 
-/* 지역 검색 */
 .input-row{display:flex;gap:8px;width:100%;}
 #region-input{flex:1;padding:12px 14px;font-size:15px;border:1.5px solid #e0e0e0;border-radius:10px;background:#fff;color:#1a1a1a;outline:none;transition:border-color 0.15s;}
 #region-input:focus{border-color:#03C75A;}
 .btn-search{padding:12px 20px;font-size:15px;font-weight:600;border-radius:10px;border:none;background:#03C75A;color:#fff;cursor:pointer;white-space:nowrap;}
 .btn-search:hover{background:#02a84c;}
 
-/* 위치 기반 검색 */
 .location-panel{width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;}
 .btn-location{width:100%;padding:16px;font-size:16px;font-weight:700;border-radius:14px;border:none;background:#03C75A;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background 0.15s,transform 0.1s;box-shadow:0 4px 14px rgba(3,199,90,0.3);}
 .btn-location:hover{background:#02a84c;}
 .btn-location:active{transform:scale(0.98);}
+.btn-location:disabled{opacity:0.6;cursor:not-allowed;}
 .location-desc{font-size:13px;color:#999;text-align:center;line-height:1.6;}
 
-/* 빠른 검색 태그 */
 .tag-wrap{width:100%;text-align:center;}
 .tag-label{font-size:12px;color:#bbb;margin-bottom:8px;}
 .tag-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;}
 .tag{padding:5px 13px;font-size:13px;border-radius:20px;border:1px solid #e0e0e0;background:#fff;color:#555;cursor:pointer;transition:all 0.15s;}
 .tag:hover{border-color:#03C75A;color:#03C75A;background:#f0fff5;}
 
-/* 로딩 */
+/* 로딩 화면 */
 #loading-screen{min-height:320px;justify-content:center;align-items:center;gap:1rem;}
 .spinner{width:44px;height:44px;border:3.5px solid #e8e8e8;border-top-color:#03C75A;border-radius:50%;animation:spin 0.75s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .load-txt{font-size:15px;color:#666;text-align:center;line-height:1.9;}
 .load-bold{font-weight:700;color:#1a1a1a;}
+/* 지역 검색용 스텝 */
 #load-steps{width:100%;max-width:240px;display:flex;flex-direction:column;gap:8px;margin-top:4px;}
 .load-step-item{font-size:13px;color:#ccc;padding:7px 14px;border-radius:8px;background:#f5f5f5;transition:all 0.3s;}
 .load-step-item.active{color:#03C75A;background:#f0fff5;font-weight:700;}
 .load-step-item.done{color:#bbb;background:#f5f5f5;text-decoration:line-through;}
+/* 위치 검색용 안내 */
+#load-location-info{font-size:13px;color:#aaa;text-align:center;margin-top:4px;line-height:1.7;}
 
-/* 룰렛 */
+/* 룰렛 화면 */
 .roulette-header{display:flex;align-items:center;gap:10px;width:100%;}
 .btn-back{padding:7px 13px;font-size:13px;border-radius:8px;border:1px solid #e0e0e0;background:#fff;color:#666;cursor:pointer;}
 .btn-back:hover{background:#f5f5f5;}
@@ -75,9 +76,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sa
 #res-distance{font-size:13px;color:#03C75A;font-weight:600;margin-bottom:6px;}
 #res-addr{font-size:13px;color:#999;margin-bottom:16px;line-height:1.5;}
 .map-btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
-.btn-kakao-place{display:inline-flex;align-items:center;gap:5px;padding:10px 18px;background:#FEE500;color:#3C1E1E;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;}
-.btn-naver-map{display:inline-flex;align-items:center;gap:5px;padding:10px 18px;background:#03C75A;color:#fff;border-radius:10px;font-size:13px;font-weight:600;text-decoration:none;}
-.btn-google{display:inline-flex;align-items:center;gap:5px;padding:10px 18px;background:#fff;color:#444;border:1.5px solid #e0e0e0;border-radius:10px;font-size:13px;font-weight:600;text-decoration:none;}
+.btn-kakao-place{display:inline-flex;align-items:center;padding:10px 18px;background:#FEE500;color:#3C1E1E;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;}
+.btn-naver-map{display:inline-flex;align-items:center;padding:10px 18px;background:#03C75A;color:#fff;border-radius:10px;font-size:13px;font-weight:600;text-decoration:none;}
+.btn-google{display:inline-flex;align-items:center;padding:10px 18px;background:#fff;color:#444;border:1.5px solid #e0e0e0;border-radius:10px;font-size:13px;font-weight:600;text-decoration:none;}
 
 .err-box{padding:1.1rem;background:#fff8f8;border-radius:10px;font-size:13px;color:#c0392b;text-align:center;width:100%;border:1px solid #fdd;}
 </style>
@@ -93,7 +94,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sa
       <div class="sub">지역 검색 또는 내 주변 1km 맛집을<br>찾아서 룰렛을 만들어드려요!</div>
     </div>
 
-    <!-- 모드 탭 -->
     <div class="mode-tabs">
       <button class="mode-tab active" id="tab-region" onclick="switchMode('region')">📍 지역 검색</button>
       <button class="mode-tab" id="tab-location" onclick="switchMode('location')">🗺️ 내 주변 1km</button>
@@ -126,9 +126,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sa
         📍 내 주변 1km 맛집 찾기
       </button>
       <div class="location-desc">
-        버튼을 누르면 현재 위치를 기준으로<br>
+        버튼을 누르면 현재 위치 기준<br>
         반경 <strong>1km 이내</strong> 맛집을 카카오에서 검색해요.<br>
-        <span style="color:#bbb;font-size:12px;">위치 권한 허용이 필요해요</span>
+        <span style="color:#bbb;font-size:12px;">위치 권한 허용이 필요해요 · HTTPS 필수</span>
       </div>
     </div>
   </div>
@@ -139,12 +139,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sa
     <div class="load-txt">
       <span class="load-bold" id="load-title"></span>
     </div>
+    <!-- 지역 검색용 카테고리 스텝 -->
     <div id="load-steps">
       <div class="load-step-item" id="step-0">🍚 한식</div>
       <div class="load-step-item" id="step-1">🍝 양식</div>
       <div class="load-step-item" id="step-2">🥟 중식</div>
       <div class="load-step-item" id="step-3">🥩 고기집</div>
       <div class="load-step-item" id="step-4">🍽️ 기타 맛집</div>
+    </div>
+    <!-- 위치 검색용 안내 (기본 숨김) -->
+    <div id="load-location-info" class="hidden">
+      카카오에서 주변 맛집을 가져오는 중이에요<br>
+      <span style="color:#ccc;font-size:12px;">최대 90개 · 정확도 높은 순</span>
     </div>
   </div>
 
@@ -182,34 +188,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sa
 <script>
 const COLORS=['#D85A30','#185FA5','#1D9E75','#BA7517','#993556','#639922','#533AB7','#0F6E56','#993C1D','#3B6D11','#D4537E','#0C447C','#3C3489','#857A3B','#85B7EB'];
 const CATEGORIES=[
-  {keyword:'한식', emoji:'🍚', label:'한식'},
-  {keyword:'양식', emoji:'🍝', label:'양식'},
-  {keyword:'중식', emoji:'🥟', label:'중식'},
+  {keyword:'한식',  emoji:'🍚', label:'한식'},
+  {keyword:'양식',  emoji:'🍝', label:'양식'},
+  {keyword:'중식',  emoji:'🥟', label:'중식'},
   {keyword:'고기집',emoji:'🥩', label:'고기집'},
-  {keyword:'맛집', emoji:'🍽️', label:'기타 맛집'},
+  {keyword:'맛집',  emoji:'🍽️', label:'기타 맛집'},
 ];
 
 let restaurants=[], currentAngle=0, spinning=false;
-let currentMode = 'region';
 const canvas=document.getElementById('wheel'), ctx=canvas.getContext('2d');
 
-// ── 모드 전환 ────────────────────────────────────────────────────────
+// ── 모드 전환 ─────────────────────────────────────────────────────────
 function switchMode(mode) {
-  currentMode = mode;
-  document.getElementById('tab-region').className = 'mode-tab' + (mode==='region'?' active':'');
-  document.getElementById('tab-location').className = 'mode-tab' + (mode==='location'?' active':'');
-  document.getElementById('panel-region').classList.toggle('hidden', mode!=='region');
+  document.getElementById('tab-region').className  = 'mode-tab' + (mode==='region'  ?' active':'');
+  document.getElementById('tab-location').className= 'mode-tab' + (mode==='location'?' active':'');
+  document.getElementById('panel-region').classList.toggle('hidden',   mode!=='region');
   document.getElementById('panel-location').classList.toggle('hidden', mode!=='location');
 }
 
-// ── 화면 전환 ────────────────────────────────────────────────────────
+// ── 화면 전환 ─────────────────────────────────────────────────────────
 function showScreen(id) {
   ['search-screen','loading-screen','roulette-screen'].forEach(s => {
     document.getElementById(s).classList.toggle('hidden', s!==id);
   });
 }
 
-// ── 로딩 스텝 ────────────────────────────────────────────────────────
+// ── 로딩 스텝 (지역 검색용) ───────────────────────────────────────────
 function setStep(activeIdx) {
   for (let i=0; i<5; i++) {
     const el = document.getElementById('step-'+i);
@@ -220,7 +224,15 @@ function setStep(activeIdx) {
   }
 }
 
-// ── 룰렛 그리기 ──────────────────────────────────────────────────────
+// ── 로딩 화면 모드 설정 ───────────────────────────────────────────────
+function setLoadingMode(mode, title) {
+  document.getElementById('load-title').textContent = title;
+  document.getElementById('load-steps').classList.toggle('hidden', mode==='location');
+  document.getElementById('load-location-info').classList.toggle('hidden', mode==='region');
+  if (mode==='region') setStep(0);
+}
+
+// ── 룰렛 그리기 ───────────────────────────────────────────────────────
 function drawWheel(angle) {
   const n=restaurants.length; if(!n) return;
   const arc=(2*Math.PI)/n, cx=canvas.width/2, cy=canvas.height/2, r=148;
@@ -234,7 +246,7 @@ function drawWheel(angle) {
     ctx.save(); ctx.translate(cx,cy); ctx.rotate(s+arc/2);
     ctx.textAlign='right'; ctx.fillStyle='#fff';
     ctx.font='bold 11.5px -apple-system,sans-serif';
-    const nm=restaurants[i].name.length>7?restaurants[i].name.slice(0,7)+'…':restaurants[i].name;
+    const nm=restaurants[i].name.length>7 ? restaurants[i].name.slice(0,7)+'…' : restaurants[i].name;
     ctx.fillText(nm, r-10, 4); ctx.restore();
   }
   ctx.beginPath(); ctx.arc(cx,cy,22,0,2*Math.PI);
@@ -244,11 +256,13 @@ function drawWheel(angle) {
 
 function easeOut(t) { return 1-Math.pow(1-t,4); }
 
+// ── 스핀 ──────────────────────────────────────────────────────────────
 document.getElementById('spin-btn').addEventListener('click', () => {
   if (spinning || !restaurants.length) return;
   spinning=true;
   document.getElementById('spin-btn').disabled=true;
   document.getElementById('result-card').style.display='none';
+
   const n=restaurants.length, arc=(2*Math.PI)/n;
   const targetSlice=Math.floor(Math.random()*n);
   const fullSpins=(4+Math.floor(Math.random()*4))*2*Math.PI;
@@ -258,6 +272,7 @@ document.getElementById('spin-btn').addEventListener('click', () => {
   const diff=(tgtNorm-curNorm+2*Math.PI)%(2*Math.PI);
   const totalRot=fullSpins+diff, dur=4000+Math.random()*1500;
   const startA=currentAngle; let startT=null;
+
   function animate(ts) {
     if (!startT) startT=ts;
     const p=Math.min((ts-startT)/dur,1);
@@ -269,32 +284,81 @@ document.getElementById('spin-btn').addEventListener('click', () => {
   requestAnimationFrame(animate);
 });
 
+// ── 결과 표시 ─────────────────────────────────────────────────────────
 function showResult() {
   const n=restaurants.length, arc=(2*Math.PI)/n;
+  // ✅ 검증된 정확한 인덱스 계산
   const idx=(((Math.floor(-currentAngle/arc))%n)+n)%n;
   const r=restaurants[idx];
-  document.getElementById('res-emoji').textContent = r.emoji||'🍽️';
-  document.getElementById('res-name').textContent = r.name;
-  document.getElementById('res-cat').textContent = r.category||'음식점';
-  // 거리 표시 (위치 기반 검색 시에만)
-  const distEl = document.getElementById('res-distance');
-  distEl.textContent = r.distance ? `📍 현재 위치에서 약 ${r.distance}` : '';
-  document.getElementById('res-addr').textContent = r.address||'';
+
+  document.getElementById('res-emoji').textContent   = r.emoji || '🍽️';
+  document.getElementById('res-name').textContent    = r.name;
+  document.getElementById('res-cat').textContent     = r.category || '음식점';
+  document.getElementById('res-distance').textContent= r.distance ? `📍 현재 위치에서 약 ${r.distance}` : '';
+  document.getElementById('res-addr').textContent    = r.address || '';
+
   const q=encodeURIComponent(r.name+(r.address?' '+r.address.split(' ').slice(0,3).join(' '):''));
   document.getElementById('btn-kakao-place').href = r.kakaoUrl || `https://map.kakao.com/?q=${q}`;
-  document.getElementById('btn-naver-map').href = r.naverUrl || `https://map.naver.com/p/search/${q}`;
-  document.getElementById('btn-google').href = `https://www.google.com/maps/search/${q}`;
+  document.getElementById('btn-naver-map').href   = r.naverUrl || `https://map.naver.com/p/search/${q}`;
+  document.getElementById('btn-google').href      = `https://www.google.com/maps/search/${q}`;
+
   const card=document.getElementById('result-card');
   card.style.display='block';
   card.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
-// ── 공통 검색 실행 ────────────────────────────────────────────────────
-async function runSearch(title, makeBody) {
-  showScreen('loading-screen');
-  document.getElementById('load-title').textContent = title;
+// ── 공통: 결과 → 룰렛 화면 표시 ──────────────────────────────────────
+function showRoulette(title, items) {
+  restaurants = items;
+  // ✅ 수정: result-card 숨기기 + err-msg 숨기기
+  document.getElementById('result-card').style.display='none';
   document.getElementById('err-msg').classList.add('hidden');
-  setStep(0);
+
+  if (!restaurants.length) {
+    document.getElementById('roulette-region').textContent=title;
+    document.getElementById('roulette-count').textContent='';
+    showScreen('roulette-screen');
+    const err=document.getElementById('err-msg');
+    err.classList.remove('hidden');
+    err.textContent='검색 결과가 없어요. 다른 지역이나 다시 시도해보세요.';
+    return;
+  }
+
+  currentAngle=0; drawWheel(0);
+  document.getElementById('roulette-region').textContent=title;
+  document.getElementById('roulette-count').textContent=` · ${restaurants.length}개 맛집`;
+  showScreen('roulette-screen');
+}
+
+// ── 위치 기반 검색 (카카오, 서버에서 최대 90개 한번에) ────────────────
+async function runLocationSearch(lat, lng) {
+  const title = '내 주변 1km';
+  showScreen('loading-screen');
+  setLoadingMode('location', '내 주변 맛집 검색 중...');
+
+  try {
+    const resp = await fetch('/api/search', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ mode:'location', lat, lng })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || '서버 오류가 발생했어요.');
+    showRoulette(title, data.items || []);
+  } catch(e) {
+    showScreen('roulette-screen');
+    document.getElementById('roulette-region').textContent=title;
+    document.getElementById('roulette-count').textContent='';
+    const err=document.getElementById('err-msg');
+    err.classList.remove('hidden');
+    err.textContent='검색 실패: '+(e.message||'알 수 없는 오류');
+  }
+}
+
+// ── 지역명 검색 (네이버, 5개 카테고리 순차 호출) ─────────────────────
+async function runRegionSearch(region) {
+  showScreen('loading-screen');
+  setLoadingMode('region', region);
 
   const allItems=[], seenNames=new Set();
 
@@ -305,7 +369,7 @@ async function runSearch(title, makeBody) {
       const resp=await fetch('/api/search', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(makeBody(cat.keyword))
+        body:JSON.stringify({ mode:'region', region, keyword:cat.keyword })
       });
       if (resp.ok) {
         const data=await resp.json();
@@ -316,64 +380,18 @@ async function runSearch(title, makeBody) {
           }
         }
       }
-    } catch(e) {
-      console.warn(`${cat.label} 검색 실패:`, e.message);
-    }
+    } catch(e) { console.warn(`${cat.label} 검색 실패:`, e.message); }
   }
-  setStep(5);
-
-  restaurants=allItems;
-
-  if (!restaurants.length) {
-    showScreen('roulette-screen');
-    const err=document.getElementById('err-msg');
-    err.classList.remove('hidden');
-    err.textContent='검색 결과가 없어요. 다시 시도해보세요.';
-    document.getElementById('roulette-region').textContent=title;
-    document.getElementById('roulette-count').textContent='';
-    return;
-  }
-
-  currentAngle=0; drawWheel(0);
-  document.getElementById('roulette-region').textContent=title;
-  document.getElementById('roulette-count').textContent=` · ${restaurants.length}개 맛집`;
-  document.getElementById('result-card').style.display='none';
-  showScreen('roulette-screen');
+  setStep(5); // 모든 스텝 done 처리
+  showRoulette(region, allItems);
 }
 
-// ── 지역명 검색 ──────────────────────────────────────────────────────
+// ── 이벤트: 지역 검색 ────────────────────────────────────────────────
 function doRegionSearch() {
   const region=document.getElementById('region-input').value.trim();
   if (!region) { document.getElementById('region-input').focus(); return; }
-  runSearch(region, (keyword) => ({ mode:'region', region, keyword }));
+  runRegionSearch(region);
 }
-
-// ── 위치 기반 검색 ────────────────────────────────────────────────────
-document.getElementById('location-btn').addEventListener('click', () => {
-  if (!navigator.geolocation) {
-    alert('이 브라우저는 위치 기능을 지원하지 않아요.');
-    return;
-  }
-  document.getElementById('location-btn').textContent='📍 위치 확인 중...';
-  document.getElementById('location-btn').disabled=true;
-
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const lat=pos.coords.latitude, lng=pos.coords.longitude;
-      document.getElementById('location-btn').textContent='📍 내 주변 1km 맛집 찾기';
-      document.getElementById('location-btn').disabled=false;
-      runSearch('내 주변 1km', (keyword) => ({ mode:'location', lat, lng, keyword }));
-    },
-    (err) => {
-      document.getElementById('location-btn').textContent='📍 내 주변 1km 맛집 찾기';
-      document.getElementById('location-btn').disabled=false;
-      alert('위치 정보를 가져올 수 없어요.\n브라우저에서 위치 권한을 허용해주세요.');
-    },
-    { enableHighAccuracy:true, timeout:10000 }
-  );
-});
-
-// ── 이벤트 바인딩 ────────────────────────────────────────────────────
 document.getElementById('search-btn').addEventListener('click', doRegionSearch);
 document.getElementById('region-input').addEventListener('keydown', e => {
   if (e.key==='Enter') doRegionSearch();
@@ -381,9 +399,36 @@ document.getElementById('region-input').addEventListener('keydown', e => {
 document.querySelectorAll('.tag').forEach(t => {
   t.addEventListener('click', () => {
     document.getElementById('region-input').value=t.textContent;
-    runSearch(t.textContent, (keyword) => ({ mode:'region', region:t.textContent, keyword }));
+    runRegionSearch(t.textContent);
   });
 });
+
+// ── 이벤트: 위치 기반 검색 ───────────────────────────────────────────
+document.getElementById('location-btn').addEventListener('click', () => {
+  if (!navigator.geolocation) {
+    alert('이 브라우저는 위치 기능을 지원하지 않아요.');
+    return;
+  }
+  const btn=document.getElementById('location-btn');
+  btn.textContent='📍 위치 확인 중...';
+  btn.disabled=true;
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      btn.textContent='📍 내 주변 1km 맛집 찾기';
+      btn.disabled=false;
+      runLocationSearch(pos.coords.latitude, pos.coords.longitude);
+    },
+    () => {
+      btn.textContent='📍 내 주변 1km 맛집 찾기';
+      btn.disabled=false;
+      alert('위치 정보를 가져올 수 없어요.\n브라우저에서 위치 권한을 허용하거나\nHTTPS(배포 URL)로 접속해주세요.');
+    },
+    { enableHighAccuracy:true, timeout:10000 }
+  );
+});
+
+// ── 이벤트: 다시 검색 ────────────────────────────────────────────────
 document.getElementById('back-btn').addEventListener('click', () => {
   restaurants=[];
   showScreen('search-screen');

@@ -1,10 +1,6 @@
 // api/search.js - Vercel Serverless Function
-// ✅ mode=location: 카카오 로컬 API
-//    - "맛집" 키워드 + 위도/경도 + radius=1000
-//    - sort=accuracy (정확도순 = 인기/관련도 높은 순)
-//    - size=30, page 1~3 병렬 호출 → 최대 90개
-//    - meta.is_end 로 결과 없으면 조기 종료
-// ✅ mode=region: 네이버 Local Search API (지역명 검색)
+// ✅ mode=location : 카카오 로컬 API (위치 기반 반경 1km, 정확도순, 최대 90개)
+// ✅ mode=region   : 네이버 Local Search API (지역명 텍스트 검색)
 // 환경변수: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET, KAKAO_REST_API_KEY
 
 const rateLimit = new Map();
@@ -69,7 +65,8 @@ function formatKakaoDoc(doc) {
 
 // 카카오 단일 페이지 호출
 async function kakaoSearchPage(lat, lng, page, kakaoKey) {
-  const url = `https://dapi.kakao.com/v2/local/search/keyword.json` +
+  const url =
+    `https://dapi.kakao.com/v2/local/search/keyword.json` +
     `?query=${encodeURIComponent('맛집')}` +
     `&x=${lng}&y=${lat}` +
     `&radius=1000` +
@@ -82,7 +79,8 @@ async function kakaoSearchPage(lat, lng, page, kakaoKey) {
   });
 
   if (!res.ok) {
-    console.error(`카카오 API 오류 page${page}:`, res.status, await res.text());
+    const errText = await res.text();
+    console.error(`카카오 API 오류 page${page}: ${res.status} ${errText}`);
     return { documents: [], isEnd: true };
   }
 
@@ -93,34 +91,35 @@ async function kakaoSearchPage(lat, lng, page, kakaoKey) {
   };
 }
 
-// ── 카카오 로컬 API (위치 기반 반경 1km, 정확도순) ───────────────────
+// 카카오 로컬 API - 위치 기반 반경 1km, 정확도순, 최대 90개
 async function searchByLocation(lat, lng, kakaoKey) {
-  // page 1~3 병렬 호출 (최대 90개)
+  // page 1~3 병렬 호출
   const [p1, p2, p3] = await Promise.all([
     kakaoSearchPage(lat, lng, 1, kakaoKey),
     kakaoSearchPage(lat, lng, 2, kakaoKey),
     kakaoSearchPage(lat, lng, 3, kakaoKey),
   ]);
 
-  // p1이 끝이면 p2, p3는 빈 배열이므로 자동으로 처리됨
+  // is_end 기준으로 유효한 페이지 결과만 합산
   const allDocs = [
     ...p1.documents,
     ...(p1.isEnd ? [] : p2.documents),
     ...(p1.isEnd || p2.isEnd ? [] : p3.documents),
   ];
 
-  // 중복 제거
+  // ✅ 수정: doc.id 없을 경우 place_name으로 fallback 중복 제거
   const seen = new Set();
   const unique = allDocs.filter(doc => {
-    if (seen.has(doc.id)) return false;
-    seen.add(doc.id);
+    const key = doc.id || doc.place_name;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
 
   return unique.map(formatKakaoDoc);
 }
 
-// ── 네이버 Local Search API (지역명 검색) ────────────────────────────
+// 네이버 Local Search API - 지역명 텍스트 검색
 async function searchByRegion(region, keyword, clientId, clientSecret) {
   const query = `${region} ${keyword}`;
   const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=5&start=1&sort=comment`;
@@ -130,7 +129,10 @@ async function searchByRegion(region, keyword, clientId, clientSecret) {
       'X-Naver-Client-Secret': clientSecret,
     }
   });
-  if (!res.ok) return [];
+  if (!res.ok) {
+    console.error(`네이버 API 오류: ${res.status}`);
+    return [];
+  }
   const data = await res.json();
   return (data.items || []).map(item => ({
     name: stripTags(item.title),
@@ -151,7 +153,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: '허용되지 않는 메서드입니다.' });
 
   const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || 'unknown';
-  if (!checkRateLimit(ip)) return res.status(429).json({ error: '잠시 후 다시 시도해주세요.' });
+  if (!checkRateLimit(ip)) return res.status(429).json({ error: '요청이 너무 많아요. 1분 후 다시 시도해주세요.' });
 
   const { mode, region, keyword, lat, lng } = req.body || {};
 
@@ -160,17 +162,23 @@ export default async function handler(req, res) {
 
     if (mode === 'location') {
       const kakaoKey = process.env.KAKAO_REST_API_KEY;
-      if (!kakaoKey) return res.status(500).json({ error: '카카오 API 키가 설정되지 않았어요. Vercel 환경변수에 KAKAO_REST_API_KEY를 추가해주세요.' });
-      if (!lat || !lng) return res.status(400).json({ error: `위치 정보가 없어요. lat=${lat}, lng=${lng}` });
-
+      if (!kakaoKey) {
+        return res.status(500).json({ error: '카카오 API 키가 설정되지 않았어요. Vercel 환경변수에 KAKAO_REST_API_KEY를 추가해주세요.' });
+      }
+      if (lat == null || lng == null) {
+        return res.status(400).json({ error: '위치 정보가 없어요.' });
+      }
       items = await searchByLocation(parseFloat(lat), parseFloat(lng), kakaoKey);
 
     } else {
       const clientId = process.env.NAVER_CLIENT_ID;
       const clientSecret = process.env.NAVER_CLIENT_SECRET;
-      if (!clientId || !clientSecret) return res.status(500).json({ error: '네이버 API 키가 설정되지 않았어요.' });
-      if (!region || !keyword) return res.status(400).json({ error: '파라미터가 없어요.' });
-
+      if (!clientId || !clientSecret) {
+        return res.status(500).json({ error: '네이버 API 키가 설정되지 않았어요.' });
+      }
+      if (!region || !keyword) {
+        return res.status(400).json({ error: '파라미터가 없어요.' });
+      }
       items = await searchByRegion(region, keyword, clientId, clientSecret);
     }
 
@@ -178,6 +186,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('Handler error:', err.message);
-    return res.status(500).json({ error: err.message, items: [] });
+    return res.status(500).json({ error: err.message || '서버 오류가 발생했어요.' });
   }
 }
